@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:sony_camera_api/camera.dart";
-import "package:localstore/localstore.dart";
 import "package:fast_cached_network_image/fast_cached_network_image.dart";
-import "package:path_provider/path_provider.dart";
-import "package:device_info_plus/device_info_plus.dart";
 import "package:transferapp/cameralist.dart";
+import "package:path_provider/path_provider.dart";
 
 void main() async{
   //Camera camera = Camera();
@@ -43,8 +40,6 @@ class MyHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("App"),),
-      body:Column(children:[CameraList()] ));
+    return Container(child: CameraList());
   }
 }

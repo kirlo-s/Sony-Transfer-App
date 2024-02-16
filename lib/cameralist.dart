@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
-
+import 'package:flutter/foundation.dart';
+import "package:localstore/localstore.dart";
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import "package:permission_handler/permission_handler.dart";
+import "util.dart";
+import "package:intl/intl.dart";
 
 final osInfoProvider = FutureProvider<OperatingSystemInfo?>((ref) async{
   final OperatingSystemInfo osInfo = await _getOSInfo();
@@ -12,12 +17,109 @@ final osInfoProvider = FutureProvider<OperatingSystemInfo?>((ref) async{
 
 final isPermissionGrantedProvider = StateProvider<bool>((ref) => false);
 
-class CameraList extends ConsumerWidget {
+enum cameraListMenu {info, edit, delete}
+
+class CameraList extends ConsumerStatefulWidget {
+  const CameraList({super.key});
+
   @override
-  Widget build(BuildContext context,WidgetRef ref){
+  CameraListState createState() => CameraListState();
+}
+
+class CameraListState extends ConsumerState<CameraList> {
+  final _db = Localstore.instance;
+  final _items = <String,CameraData>{};
+  StreamSubscription<Map<String,dynamic>>? _subscription;
+
+  @override
+  void initState(){
+    _subscription = _db.collection('cameraList').stream.listen((event) { 
+      setState(() {
+        final item = CameraData.fromMap(event);
+        _items.putIfAbsent(item.id, () => item);
+      });
+    });
+    if(kIsWeb) _db.collection('cameraList').stream.asBroadcastStream();
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context){
+    SplayTreeMap.from(_items,(a,b) => _items[a]!.lastConnected.compareTo(_items[b]!.lastConnected));
     final osInfo = ref.watch(osInfoProvider);
     if(ref.watch(isPermissionGrantedProvider)){
-      return Text("Granted");
+      return Scaffold(
+        body: ListView.builder(
+            itemCount: _items.keys.length,
+            itemBuilder: (context, index) {
+              final key = _items.keys.elementAt(index);
+              final item = _items[key]!;
+              return Card(
+                child: ListTile(
+                  title: Text(item.customName),
+                  subtitle: Text(item.modelName),
+                  trailing: PopupMenuButton<cameraListMenu>(
+                    onSelected: (cameraListMenu menu) async{
+                      if(menu == cameraListMenu.info){
+                        _showInfoDialog(context,item);
+                      }
+                      if(menu == cameraListMenu.edit){
+                        String name = await _showEditDialog(context,item);
+                        setState(() {
+                          item.customName = name.isNotEmpty ? name:item.customName;
+                          item.save();
+                        });
+                      }
+                      if(menu == cameraListMenu.delete){
+                        bool isDelete = await _showDeleteDialog(context, item);
+                        if(isDelete){
+                          setState(() {
+                            _items.remove(key);
+                            item.delete();
+                          });
+                        }
+                      }
+                    },
+                    itemBuilder: (context) => <PopupMenuEntry<cameraListMenu>>[
+                      const PopupMenuItem(
+                        value: cameraListMenu.info,
+                        child: ListTile(
+                          leading: Icon(Icons.info),
+                          title: Text("詳細"),
+                      )),
+                      const PopupMenuItem(
+                        value: cameraListMenu.edit,
+                        child: ListTile(
+                          leading: Icon(Icons.edit),
+                          title: Text("名前の編集"),
+                      )),
+                      const PopupMenuItem(
+                        value: cameraListMenu.delete,
+                        child: ListTile(
+                          leading: Icon(Icons.delete),
+                          title: Text("削除"),
+                      ))
+                    ],
+                  ),
+                ),
+              );
+            }),
+        floatingActionButton: FloatingActionButton(onPressed: (){
+            final id = Localstore.instance.collection('cameraList').doc().id;
+            const customName = "customName";
+            const modelName = "modelName";
+            const endpoint = "endpoint";
+            final lastConnected = DateTime.now();
+            final item = CameraData(id: id, customName: customName, modelName: modelName, endpoint: endpoint,lastConnected: lastConnected);
+            item.save();
+            _items.putIfAbsent(item.id, () => item);
+            print(_items.keys.length);
+          },
+          tooltip: 'add',
+          child: const Icon(Icons.add),
+          ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      );
     }else{
     return osInfo.when(
       data: (data) {
@@ -27,7 +129,7 @@ class CameraList extends ConsumerWidget {
           });
           return const Text("granted");
         }
-        if((data!.os == "android") && (data.sdk > 28)){
+        if((data.os == "android") && (data.sdk > 28)){
           return Column(children: [
                 const Text("権限:read_photo"),
                 ElevatedButton(onPressed: () async {
@@ -60,6 +162,11 @@ class CameraList extends ConsumerWidget {
     }
   }
 
+  @override
+  void dispose(){
+    if (_subscription != null) _subscription?.cancel();
+    super.dispose();
+  }
 }
 
 
@@ -84,4 +191,89 @@ class OperatingSystemInfo {
     int sdk = 0;
     late PermissionStatus readPhotosStatus;
     late PermissionStatus storageStatus;
+}
+
+void _showInfoDialog(BuildContext context,CameraData item) {
+  showDialog(context: context, builder: (context){
+    String name = item.customName;
+    String model = item.modelName;
+    String endpoint = item.endpoint;
+    DateTime lastConnected = item.lastConnected;
+    return AlertDialog(
+      title: Text(name),
+      content:SizedBox(
+        width: 0,
+        child:ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            ListTile(
+              title: const Text("モデル"),
+              subtitle: Text(model),
+            ),
+            ListTile(
+              title: const Text("エンドポイント"),
+              subtitle: Text(endpoint),
+            ),
+            ListTile(
+              title: const Text("最終接続"),
+              subtitle:  Text(DateFormat('yyyy年M月d日 hh:mm:ss').format(lastConnected)),
+            )
+          ],
+        ),
+      ),
+    );
+
+  });
+}
+
+Future<String> _showEditDialog(BuildContext context,CameraData item) async{
+  final TextEditingController _controller = TextEditingController();
+  String? name_t;
+  name_t = await showDialog(context: context, 
+    builder: (context) {
+      return AlertDialog(
+        title: Text('${item.customName}の名前を変更'),
+        content: TextField(
+          decoration: const InputDecoration(hintText: "入力"),
+          controller: _controller,
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: (){
+              Navigator.pop(context,_controller.text);
+            }, 
+            child: const Text("キャンセル")),
+          TextButton(
+            onPressed: (){
+              Navigator.pop(context,_controller.text);
+            }, 
+            child: const Text("変更")),
+        ],
+      );
+    });
+  return name_t ?? "";
+}
+
+Future<bool> _showDeleteDialog(BuildContext context,CameraData item) async{
+  bool? isDelete = false;
+  isDelete = await showDialog(
+    context: context, 
+    builder: (context){
+      return AlertDialog(
+        title: Text("${item.customName}を削除しますか?"),
+        actions: <Widget>[
+          TextButton(
+            onPressed: (){
+              Navigator.pop(context,false);
+            }, 
+            child: const Text("キャンセル")),
+          TextButton(
+            onPressed: (){
+              Navigator.pop(context,true);
+            }, 
+            child: const Text("削除")),
+        ],
+      );
+    });
+  return isDelete ?? false;
 }
