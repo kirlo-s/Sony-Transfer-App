@@ -7,6 +7,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import "package:permission_handler/permission_handler.dart";
+import 'package:sony_camera_api/camera.dart';
+import 'package:transferapp/main.dart';
 import "util.dart";
 import "package:intl/intl.dart";
 
@@ -28,14 +30,14 @@ class CameraList extends ConsumerStatefulWidget {
 
 class CameraListState extends ConsumerState<CameraList> {
   final _db = Localstore.instance;
-  final _items = <String,CameraData>{};
+  final _items = <String,CameraListEntry>{};
   StreamSubscription<Map<String,dynamic>>? _subscription;
 
   @override
   void initState(){
     _subscription = _db.collection('cameraList').stream.listen((event) { 
       setState(() {
-        final item = CameraData.fromMap(event);
+        final item = CameraListEntry.fromMap(event);
         _items.putIfAbsent(item.id, () => item);
       });
     });
@@ -49,71 +51,86 @@ class CameraListState extends ConsumerState<CameraList> {
     final osInfo = ref.watch(osInfoProvider);
     if(ref.watch(isPermissionGrantedProvider)){
       return Scaffold(
-        body: ListView.builder(
-            itemCount: _items.keys.length,
-            itemBuilder: (context, index) {
-              final key = _items.keys.elementAt(index);
-              final item = _items[key]!;
-              return Card(
-                child: ListTile(
-                  title: Text(item.customName),
-                  subtitle: Text(item.modelName),
-                  trailing: PopupMenuButton<cameraListMenu>(
-                    onSelected: (cameraListMenu menu) async{
-                      if(menu == cameraListMenu.info){
-                        _showInfoDialog(context,item);
-                      }
-                      if(menu == cameraListMenu.edit){
-                        String name = await _showEditDialog(context,item);
-                        setState(() {
-                          item.customName = name.isNotEmpty ? name:item.customName;
-                          item.save();
-                        });
-                      }
-                      if(menu == cameraListMenu.delete){
-                        bool isDelete = await _showDeleteDialog(context, item);
-                        if(isDelete){
+        body: Column(
+          children: [
+            const Text("Title"),
+            Flexible(child:  ListView.builder(
+              itemCount: _items.keys.length,
+              itemBuilder: (context, index) {
+                final key = _items.keys.elementAt(index);
+                final item = _items[key]!;
+                return Card(
+                  child: ListTile(
+                    title: Text(item.customName),
+                    subtitle: Text(item.modelName),
+                    trailing: PopupMenuButton<cameraListMenu>(
+                      onSelected: (cameraListMenu menu) async{
+                        if(menu == cameraListMenu.info){
+                          _showInfoDialog(context,item);
+                        }
+                        if(menu == cameraListMenu.edit){
+                          String name = await _showEditDialog(context,item);
                           setState(() {
-                            _items.remove(key);
-                            item.delete();
+                            item.customName = name.isNotEmpty ? name:item.customName;
+                            item.save();
                           });
                         }
-                      }
-                    },
-                    itemBuilder: (context) => <PopupMenuEntry<cameraListMenu>>[
-                      const PopupMenuItem(
-                        value: cameraListMenu.info,
-                        child: ListTile(
-                          leading: Icon(Icons.info),
-                          title: Text("詳細"),
-                      )),
-                      const PopupMenuItem(
-                        value: cameraListMenu.edit,
-                        child: ListTile(
-                          leading: Icon(Icons.edit),
-                          title: Text("名前の編集"),
-                      )),
-                      const PopupMenuItem(
-                        value: cameraListMenu.delete,
-                        child: ListTile(
-                          leading: Icon(Icons.delete),
-                          title: Text("削除"),
-                      ))
-                    ],
+                        if(menu == cameraListMenu.delete){
+                          bool isDelete = await _showDeleteDialog(context, item);
+                          if(isDelete){
+                            setState(() {
+                              _items.remove(key);
+                              item.delete();
+                            });
+                          }
+                        }
+                      },
+                      itemBuilder: (context) => <PopupMenuEntry<cameraListMenu>>[
+                        const PopupMenuItem(
+                          value: cameraListMenu.info,
+                          child: ListTile(
+                            leading: Icon(Icons.info),
+                            title: Text("詳細"),
+                        )),
+                        const PopupMenuItem(
+                          value: cameraListMenu.edit,
+                          child: ListTile(
+                            leading: Icon(Icons.edit),
+                            title: Text("名前の編集"),
+                        )),
+                        const PopupMenuItem(
+                          value: cameraListMenu.delete,
+                          child: ListTile(
+                            leading: Icon(Icons.delete),
+                            title: Text("削除"),
+                        ))
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }),
-        floatingActionButton: FloatingActionButton(onPressed: (){
+                );
+              }),)
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(onPressed: () async{
+            Camera camera = Camera();
+            CameraDataPayload data = await camera.searchCamera(60);
+            if(data.get){
+              camera.isInitialized = true;
+              camera.customName = "customName";
+              camera.modelName = data.name;
+              ref.watch(cameraProvider.notifier).state = camera;
+              print("success");
+            }else{
+              print("failed");
+            }
             final id = Localstore.instance.collection('cameraList').doc().id;
             const customName = "customName";
             const modelName = "modelName";
             const endpoint = "endpoint";
             final lastConnected = DateTime.now();
-            final item = CameraData(id: id, customName: customName, modelName: modelName, endpoint: endpoint,lastConnected: lastConnected);
+            final item = CameraListEntry(id: id, customName: customName, modelName: modelName, endpoint: endpoint,lastConnected: lastConnected);
             item.save();
             _items.putIfAbsent(item.id, () => item);
-            print(_items.keys.length);
           },
           tooltip: 'add',
           child: const Icon(Icons.add),
@@ -137,7 +154,7 @@ class CameraListState extends ConsumerState<CameraList> {
                   print(ref.watch(isPermissionGrantedProvider));
                   var readPhotosStatus = await Permission.photos.request();
                   if(readPhotosStatus.isGranted){
-                    ref.read(isPermissionGrantedProvider.notifier).state = true;
+                    ref.watch(isPermissionGrantedProvider.notifier).state = true;
                   }else{
                     print("permission denied");
                   }
@@ -149,7 +166,7 @@ class CameraListState extends ConsumerState<CameraList> {
                 ElevatedButton(onPressed: () async {
                   var readStorageStatus = await Permission.storage.request();
                   if(readStorageStatus.isGranted){
-                    ref.read(isPermissionGrantedProvider.notifier).state = true;
+                    ref.watch(isPermissionGrantedProvider.notifier).state = true;
                   }else{
                     print("permission denied");
                   }
@@ -193,7 +210,7 @@ class OperatingSystemInfo {
     late PermissionStatus storageStatus;
 }
 
-void _showInfoDialog(BuildContext context,CameraData item) {
+void _showInfoDialog(BuildContext context,CameraListEntry item) {
   showDialog(context: context, builder: (context){
     String name = item.customName;
     String model = item.modelName;
@@ -226,7 +243,7 @@ void _showInfoDialog(BuildContext context,CameraData item) {
   });
 }
 
-Future<String> _showEditDialog(BuildContext context,CameraData item) async{
+Future<String> _showEditDialog(BuildContext context,CameraListEntry item) async{
   final TextEditingController _controller = TextEditingController();
   String? name_t;
   name_t = await showDialog(context: context, 
@@ -254,7 +271,7 @@ Future<String> _showEditDialog(BuildContext context,CameraData item) async{
   return name_t ?? "";
 }
 
-Future<bool> _showDeleteDialog(BuildContext context,CameraData item) async{
+Future<bool> _showDeleteDialog(BuildContext context,CameraListEntry item) async{
   bool? isDelete = false;
   isDelete = await showDialog(
     context: context, 

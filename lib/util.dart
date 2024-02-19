@@ -1,14 +1,15 @@
 
 import 'package:localstore/localstore.dart';
 
-class CameraData {
+class CameraListEntry {
   final String id;
   String customName;
   String modelName;
   String endpoint;
   DateTime lastConnected;
+  bool placeholder = false;
   
-  CameraData({
+  CameraListEntry({
     required this.id,
     required this.customName,
     required this.modelName,
@@ -26,8 +27,8 @@ class CameraData {
     };
   }
 
-  factory CameraData.fromMap(Map<String,dynamic> map){
-    return CameraData(
+  factory CameraListEntry.fromMap(Map<String,dynamic> map){
+    return CameraListEntry(
       id: map['id'], 
       customName: map['customName'], 
       modelName: map['modelName'], 
@@ -37,7 +38,7 @@ class CameraData {
   }
 }
 
-extension ExtCameraData on CameraData {
+extension ExtCameraData on CameraListEntry {
   Future save() async {
     final db = Localstore.instance;
     return db.collection('cameraList').doc(id).set(toMap());

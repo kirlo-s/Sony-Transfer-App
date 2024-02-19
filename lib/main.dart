@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:fast_cached_network_image/fast_cached_network_image.dart";
+import "package:sony_camera_api/camera.dart";
 import "package:transferapp/cameralist.dart";
 import "package:path_provider/path_provider.dart";
+import "package:transferapp/util.dart";
+
+final cameraProvider = StateProvider<Camera>((ref){
+  Camera camera = Camera();
+  return camera;
+});
+ 
 
 void main() async{
   //Camera camera = Camera();
@@ -33,13 +41,22 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatelessWidget {
+class MyHomePage extends ConsumerWidget {
   const MyHomePage({super.key, required this.title});
 
   final String title;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(child: CameraList());
+  Widget build(BuildContext context,WidgetRef ref) {
+    if(ref.watch(cameraProvider).isInitialized == false){
+      return const CameraList();
+    }else{
+      return Card(
+        child :ListTile(
+          title: Text(ref.watch(cameraProvider).customName),
+          subtitle: Text(ref.watch(cameraProvider).modelName),
+        )
+      );
+    }
   }
 }
