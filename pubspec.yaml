@@ -34,7 +34,7 @@ dependencies:
   sony_camera_api:
     git:
       url: https://github.com/kirlo-s/sony-camera-api-dart
-      ref: 0.2d
+      ref: 0.2f
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2

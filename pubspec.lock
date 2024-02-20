@@ -401,8 +401,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "0.2d"
-      resolved-ref: f6357212263a827ae459d30aadd337786faf6876
+      ref: "0.2f"
+      resolved-ref: "75e2510a619adc33374876775179212c737cd0ed"
       url: "https://github.com/kirlo-s/sony-camera-api-dart"
     source: git
     version: "0.0.1"

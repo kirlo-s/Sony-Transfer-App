@@ -10,7 +10,10 @@ final cameraProvider = StateProvider<Camera>((ref){
   Camera camera = Camera();
   return camera;
 });
- 
+
+final loadingProvider = NotifierProvider<LoadingNotifier,LoadingData>(LoadingNotifier.new);
+
+
 
 void main() async{
   //Camera camera = Camera();
@@ -48,15 +51,26 @@ class MyHomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context,WidgetRef ref) {
-    if(ref.watch(cameraProvider).isInitialized == false){
-      return const CameraList();
-    }else{
-      return Card(
+    return Stack(
+      children: [
+          ref.watch(cameraProvider).isInitialized ? Card(
         child :ListTile(
           title: Text(ref.watch(cameraProvider).customName),
           subtitle: Text(ref.watch(cameraProvider).modelName),
         )
-      );
-    }
+      ):const CameraList(),
+      Visibility(
+        visible: ref.watch(loadingProvider).isLoading,
+        child: const ColoredBox(
+          color: Colors.black54,
+          child: Center(
+            child: CircularProgressIndicator(),
+          ),
+          ),
+        ),        
+      ],
+    );
+
   }
 }
+

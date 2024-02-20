@@ -19,7 +19,7 @@ final osInfoProvider = FutureProvider<OperatingSystemInfo?>((ref) async{
 
 final isPermissionGrantedProvider = StateProvider<bool>((ref) => false);
 
-enum cameraListMenu {info, edit, delete}
+enum CameraListMenu {info, edit, delete}
 
 class CameraList extends ConsumerStatefulWidget {
   const CameraList({super.key});
@@ -63,19 +63,19 @@ class CameraListState extends ConsumerState<CameraList> {
                   child: ListTile(
                     title: Text(item.customName),
                     subtitle: Text(item.modelName),
-                    trailing: PopupMenuButton<cameraListMenu>(
-                      onSelected: (cameraListMenu menu) async{
-                        if(menu == cameraListMenu.info){
+                    trailing: PopupMenuButton<CameraListMenu>(
+                      onSelected: (CameraListMenu menu) async{
+                        if(menu == CameraListMenu.info){
                           _showInfoDialog(context,item);
                         }
-                        if(menu == cameraListMenu.edit){
+                        if(menu == CameraListMenu.edit){
                           String name = await _showEditDialog(context,item);
                           setState(() {
                             item.customName = name.isNotEmpty ? name:item.customName;
                             item.save();
                           });
                         }
-                        if(menu == cameraListMenu.delete){
+                        if(menu == CameraListMenu.delete){
                           bool isDelete = await _showDeleteDialog(context, item);
                           if(isDelete){
                             setState(() {
@@ -85,21 +85,21 @@ class CameraListState extends ConsumerState<CameraList> {
                           }
                         }
                       },
-                      itemBuilder: (context) => <PopupMenuEntry<cameraListMenu>>[
+                      itemBuilder: (context) => <PopupMenuEntry<CameraListMenu>>[
                         const PopupMenuItem(
-                          value: cameraListMenu.info,
+                          value: CameraListMenu.info,
                           child: ListTile(
                             leading: Icon(Icons.info),
                             title: Text("詳細"),
                         )),
                         const PopupMenuItem(
-                          value: cameraListMenu.edit,
+                          value: CameraListMenu.edit,
                           child: ListTile(
                             leading: Icon(Icons.edit),
                             title: Text("名前の編集"),
                         )),
                         const PopupMenuItem(
-                          value: cameraListMenu.delete,
+                          value: CameraListMenu.delete,
                           child: ListTile(
                             leading: Icon(Icons.delete),
                             title: Text("削除"),
@@ -112,25 +112,29 @@ class CameraListState extends ConsumerState<CameraList> {
           ],
         ),
         floatingActionButton: FloatingActionButton(onPressed: () async{
+            ref.read(loadingProvider.notifier).startLoading();
             Camera camera = Camera();
             CameraDataPayload data = await camera.searchCamera(60);
+            ref.read(loadingProvider.notifier).stopLoading();
             if(data.get){
-              camera.isInitialized = true;
-              camera.customName = "customName";
+              String customName = await _showNewCameraNameDialog(context,data.name);
+              camera.isInitialized = false;
+              camera.customName = customName;
               camera.modelName = data.name;
               ref.watch(cameraProvider.notifier).state = camera;
+              final id = Localstore.instance.collection('cameraList').doc().id;
+              final modelName = camera.modelName;
+              final endpoint = camera.endpoint;
+              final lastConnected = DateTime.now();
+              final item = CameraListEntry(id: id, customName: customName, modelName: modelName, endpoint: endpoint,lastConnected: lastConnected);
+              item.save();
+              _items.putIfAbsent(item.id, () => item);
               print("success");
             }else{
+              _showCameraNotFoundDialog(context);
               print("failed");
             }
-            final id = Localstore.instance.collection('cameraList').doc().id;
-            const customName = "customName";
-            const modelName = "modelName";
-            const endpoint = "endpoint";
-            final lastConnected = DateTime.now();
-            final item = CameraListEntry(id: id, customName: customName, modelName: modelName, endpoint: endpoint,lastConnected: lastConnected);
-            item.save();
-            _items.putIfAbsent(item.id, () => item);
+
           },
           tooltip: 'add',
           child: const Icon(Icons.add),
@@ -158,7 +162,7 @@ class CameraListState extends ConsumerState<CameraList> {
                   }else{
                     print("permission denied");
                   }
-                }, child: Text("取得する"))
+                }, child: const Text("取得する"))
               ],);
         }else{
           return Column(children: [
@@ -170,11 +174,11 @@ class CameraListState extends ConsumerState<CameraList> {
                   }else{
                     print("permission denied");
                   }
-                }, child: Text("取得する"))
+                }, child: const Text("取得する"))
               ],);
         }
       }, 
-      error: (err, _) => Text("Error"),  
+      error: (err, _) => const Text("Error"),  
       loading: () => const CircularProgressIndicator());
     }
   }
@@ -257,7 +261,7 @@ Future<String> _showEditDialog(BuildContext context,CameraListEntry item) async{
         actions: <Widget>[
           TextButton(
             onPressed: (){
-              Navigator.pop(context,_controller.text);
+              Navigator.pop(context,"");
             }, 
             child: const Text("キャンセル")),
           TextButton(
@@ -293,4 +297,53 @@ Future<bool> _showDeleteDialog(BuildContext context,CameraListEntry item) async{
       );
     });
   return isDelete ?? false;
+}
+
+Future<String> _showNewCameraNameDialog(BuildContext context,String model) async{
+final TextEditingController _controller = TextEditingController();
+  String? name_t;
+  name_t = await showDialog(context: context, 
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('カメラを発見しました'),
+        content: SingleChildScrollView(
+          child: Column(children: [
+          ListTile(
+           title: const Text("モデル"), 
+           subtitle: Text(model),
+          ),
+          TextField(
+          decoration: const InputDecoration(hintText: "名前を入力してください。"),
+          controller: _controller,
+        ),
+        ]),),
+        actions: <Widget>[
+          TextButton(
+            onPressed: (){
+              Navigator.pop(context,_controller.text);
+            }, 
+            child: const Text("登録")),
+        ],
+      );
+    });
+  if(name_t == ""){
+    name_t = "defaultName";
+  } 
+  return name_t ?? "defaultName";
+} 
+
+void _showCameraNotFoundDialog(BuildContext context){
+  showDialog(
+    context: context, 
+    builder: (context) {
+      return AlertDialog(
+        title: const Text("接続に失敗しました"),
+        content: const Text("カメラのWifiに接続されていることを確認してください。"),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context), 
+            child: const Text("OK"))
+        ],
+    );}
+    );
 }
