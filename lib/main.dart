@@ -4,6 +4,7 @@ import "package:fast_cached_network_image/fast_cached_network_image.dart";
 import "package:sony_camera_api/camera.dart";
 import "package:transferapp/cameralist.dart";
 import "package:path_provider/path_provider.dart";
+import "package:transferapp/gallery.dart";
 import "package:transferapp/util.dart";
 
 final cameraProvider = StateProvider<Camera>((ref){
@@ -24,6 +25,7 @@ void main() async{
 
   String storageLocation = (await getApplicationCacheDirectory()).path;
   await FastCachedImageConfig.init(subDir: storageLocation, clearCacheAfter: const Duration(days: 7));
+  FastCachedImageConfig.clearAllCachedImages();
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -53,12 +55,7 @@ class MyHomePage extends ConsumerWidget {
   Widget build(BuildContext context,WidgetRef ref) {
     return Stack(
       children: [
-          ref.watch(cameraProvider).isInitialized ? Card(
-        child :ListTile(
-          title: Text(ref.watch(cameraProvider).customName),
-          subtitle: Text(ref.watch(cameraProvider).modelName),
-        )
-      ):const CameraList(),
+          ref.watch(cameraProvider).isInitialized ? const Gallery():const CameraList(),
       Visibility(
         visible: ref.watch(loadingProvider).isLoading,
         child: const ColoredBox(

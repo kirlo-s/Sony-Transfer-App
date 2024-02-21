@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import "package:permission_handler/permission_handler.dart";
 import 'package:sony_camera_api/camera.dart';
+import 'package:sony_camera_api/core.dart';
 import 'package:transferapp/main.dart';
 import "util.dart";
 import "package:intl/intl.dart";
@@ -63,6 +64,22 @@ class CameraListState extends ConsumerState<CameraList> {
                   child: ListTile(
                     title: Text(item.customName),
                     subtitle: Text(item.modelName),
+                    onTap: ()async {
+                      final customName = item.customName;
+                      final modelName = item.modelName;
+                      final endpoint = item.endpoint;
+                      Camera camera = Camera();
+                      camera.initializeDirectly(endpoint, customName, modelName);
+                      ref.watch(loadingProvider.notifier).startLoading();
+                      var status = (await camera.action.getAvailableApiList()).status;
+                      ref.watch(loadingProvider.notifier).stopLoading();
+                      if(status == ResponceStatus.success){
+                      camera.isInitialized = true;
+                      item.lastConnected = DateTime.now();
+                      ref.watch(cameraProvider.notifier).state = camera;
+                      _items.putIfAbsent(item.id, () => item);
+                      }
+                    },
                     trailing: PopupMenuButton<CameraListMenu>(
                       onSelected: (CameraListMenu menu) async{
                         if(menu == CameraListMenu.info){
@@ -118,7 +135,7 @@ class CameraListState extends ConsumerState<CameraList> {
             ref.read(loadingProvider.notifier).stopLoading();
             if(data.get){
               String customName = await _showNewCameraNameDialog(context,data.name);
-              camera.isInitialized = false;
+              camera.isInitialized = true;
               camera.customName = customName;
               camera.modelName = data.name;
               ref.watch(cameraProvider.notifier).state = camera;
