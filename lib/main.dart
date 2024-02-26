@@ -1,3 +1,5 @@
+import "dart:io";
+
 import 'package:flutter/material.dart';
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:fast_cached_network_image/fast_cached_network_image.dart";
@@ -23,9 +25,10 @@ void main() async{
   //await camera.action.setCameraFunction(1);
   WidgetsFlutterBinding.ensureInitialized(); 
 
-  String storageLocation = (await getApplicationCacheDirectory()).path;
-  await FastCachedImageConfig.init(subDir: storageLocation, clearCacheAfter: const Duration(days: 7));
-  FastCachedImageConfig.clearAllCachedImages();
+  String cacheLocation = (await getApplicationCacheDirectory()).path;
+  final dir = Directory(cacheLocation);
+  dir.deleteSync(recursive: true);
+  await FastCachedImageConfig.init(subDir: cacheLocation, clearCacheAfter: const Duration(days: 7));
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -55,16 +58,21 @@ class MyHomePage extends ConsumerWidget {
   Widget build(BuildContext context,WidgetRef ref) {
     return Stack(
       children: [
-          ref.watch(cameraProvider).isInitialized ? const Gallery():const CameraList(),
-      Visibility(
-        visible: ref.watch(loadingProvider).isLoading,
-        child: const ColoredBox(
-          color: Colors.black54,
-          child: Center(
-            child: CircularProgressIndicator(),
+          Scaffold(
+            appBar: AppBar(
+              title: Text("Title")
+            ),
+            body: ref.watch(cameraProvider).isInitialized ? const Gallery():const CameraList(),
           ),
-          ),
-        ),        
+          Visibility(
+            visible: ref.watch(loadingProvider).isLoading,
+            child: const ColoredBox(
+              color: Colors.black54,
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          ),        
       ],
     );
 

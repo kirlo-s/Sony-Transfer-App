@@ -1,8 +1,13 @@
 
+import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/material.dart';
 import 'package:localstore/localstore.dart';
 import "package:riverpod/riverpod.dart";
+import "package:path_provider/path_provider.dart";
+import 'package:sony_camera_api/core.dart';
+import "package:http/http.dart" as http;
 
 class CameraListEntry {
   final String id;
@@ -78,5 +83,22 @@ class LoadingNotifier extends Notifier<LoadingData>{
     state = state.copyWith(isLoading: false);
   }
 
+}
+
+Future<PhotoCacheData> cacheThumbnailPhoto(StillData entry) async {
+  PhotoCacheData photo = PhotoCacheData();
+  String cacheLocation = (await getApplicationCacheDirectory()).path;
+  String imgPath = "$cacheLocation/${entry.fileName}";
+  final http.Response res = await http.get(Uri.parse(entry.thumbnailUrl));
+  print(res.statusCode);
+  final file = File(imgPath);
+  await file.create();
+  await file.writeAsBytes(res.bodyBytes);
+  return PhotoCacheData();
+}
+
+class PhotoCacheData {
+  bool get = false;
+  String location = "";
 }
 

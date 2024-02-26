@@ -51,10 +51,12 @@ class CameraListState extends ConsumerState<CameraList> {
     SplayTreeMap.from(_items,(a,b) => _items[a]!.lastConnected.compareTo(_items[b]!.lastConnected));
     final osInfo = ref.watch(osInfoProvider);
     if(ref.watch(isPermissionGrantedProvider)){
-      return Scaffold(
-        body: Column(
+      return Stack(
+        fit:StackFit.expand,
+        children: [
+          Column(
           children: [
-            const Text("Title"),
+            const Text("placeholder"),
             Flexible(child:  ListView.builder(
               itemCount: _items.keys.length,
               itemBuilder: (context, index) {
@@ -78,6 +80,8 @@ class CameraListState extends ConsumerState<CameraList> {
                       item.lastConnected = DateTime.now();
                       ref.watch(cameraProvider.notifier).state = camera;
                       _items.putIfAbsent(item.id, () => item);
+                      }else{
+                        _showCameraNotFoundDialog(context);
                       }
                     },
                     trailing: PopupMenuButton<CameraListMenu>(
@@ -128,7 +132,9 @@ class CameraListState extends ConsumerState<CameraList> {
               }),)
           ],
         ),
-        floatingActionButton: FloatingActionButton(onPressed: () async{
+        Align(
+          alignment: const Alignment(0, 1),
+          child :FloatingActionButton(onPressed: () async{
             ref.read(loadingProvider.notifier).startLoading();
             Camera camera = Camera();
             CameraDataPayload data = await camera.searchCamera(60);
@@ -151,13 +157,12 @@ class CameraListState extends ConsumerState<CameraList> {
               _showCameraNotFoundDialog(context);
               print("failed");
             }
-
           },
           tooltip: 'add',
           child: const Icon(Icons.add),
-          ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      );
+          )
+        )
+        ]);
     }else{
     return osInfo.when(
       data: (data) {
