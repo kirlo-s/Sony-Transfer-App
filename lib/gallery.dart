@@ -13,7 +13,7 @@ import "package:external_path/external_path.dart";
 
 final contentProvider = FutureProvider<List<GalleryEntry>>((ref) async{
   final cacheLocation = (await getApplicationCacheDirectory()).path;
-  print("start");
+  print("start:");
   DateTime start = DateTime.now();
   final imageList = <GalleryEntry>[]; 
   const cnt = 10;
