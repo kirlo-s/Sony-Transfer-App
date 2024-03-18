@@ -51,7 +51,8 @@ class CameraListState extends ConsumerState<CameraList> {
     SplayTreeMap.from(_items,(a,b) => _items[a]!.lastConnected.compareTo(_items[b]!.lastConnected));
     final osInfo = ref.watch(osInfoProvider);
     if(ref.watch(isPermissionGrantedProvider)){
-      return Stack(
+      return Scaffold(
+        body: Stack(
         fit:StackFit.expand,
         children: [
           Column(
@@ -162,9 +163,10 @@ class CameraListState extends ConsumerState<CameraList> {
           child: const Icon(Icons.add),
           )
         )
-        ]);
+        ]));
     }else{
-    return osInfo.when(
+    return Scaffold(
+    body :osInfo.when(
       data: (data) {
         if(data!.readPhotosStatus.isGranted || data.storageStatus.isGranted){
           WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
@@ -201,7 +203,7 @@ class CameraListState extends ConsumerState<CameraList> {
         }
       }, 
       error: (err, _) => const Text("Error"),  
-      loading: () => const CircularProgressIndicator());
+      loading: () => const CircularProgressIndicator()));
     }
   }
 

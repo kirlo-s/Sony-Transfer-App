@@ -58,12 +58,7 @@ class MyHomePage extends ConsumerWidget {
   Widget build(BuildContext context,WidgetRef ref) {
     return Stack(
       children: [
-          Scaffold(
-            appBar: AppBar(
-              title: Text("Title")
-            ),
-            body: ref.watch(cameraProvider).isInitialized ? const Gallery():const CameraList(),
-          ),
+          ref.watch(cameraProvider).isInitialized ? const GalleryView():const CameraList(),
           Visibility(
             visible: ref.watch(loadingProvider).isLoading,
             child: const ColoredBox(
