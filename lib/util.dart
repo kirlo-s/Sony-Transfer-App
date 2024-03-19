@@ -85,6 +85,59 @@ class LoadingNotifier extends Notifier<LoadingData>{
 
 }
 
+class DownloadStatusNotifier extends Notifier<DownloadStatusData>{
+  @override
+  DownloadStatusData build(){
+    return DownloadStatusData(isDownloading: false, isCancel: false, currentCount: 0, photoCount: 0, downloadProgress: 0, currentFileName: "");
+  }
+  
+  void startDownload(int photoCount,String currentFileName){
+    state = state.copyWith(isDownloading: true,photoCount: photoCount,currentFileName: currentFileName);    
+  }
+
+  void updatePhoto(int currentCount,String currentFilename){
+    state = state.copyWith(downloadProgress: 0,currentCount: currentCount,currentFileName: currentFilename);
+  }
+  void updateProgress(double progress){
+    state = state.copyWith(downloadProgress:progress);
+  }
+
+  void finishDownload(){
+    state = state.copyWith(isDownloading: false, isCancel: false, currentCount: 0, photoCount: 0, downloadProgress: 0, currentFileName: "");
+  }
+
+  void cancelDownload(){
+    state = state.copyWith(isCancel: true);
+  }
+}
+
+class DownloadStatusData{
+  final bool isDownloading;
+  final bool isCancel;
+  final int currentCount;
+  final int photoCount;
+  final double downloadProgress;
+  final String currentFileName;
+  DownloadStatusData({
+    required this.isDownloading,
+    required this.isCancel,
+    required this.currentCount,
+    required this.photoCount,
+    required this.downloadProgress,
+    required this.currentFileName 
+  });
+
+  DownloadStatusData copyWith({bool? isDownloading,bool? isCancel,int? currentCount,int? photoCount,double? downloadProgress,String? currentFileName}){
+    return DownloadStatusData(
+      isDownloading: isDownloading ?? this.isDownloading, 
+      isCancel: isCancel ?? this.isCancel, 
+      currentCount: currentCount?? this.currentCount, 
+      photoCount: photoCount ?? this.photoCount, 
+      downloadProgress: downloadProgress ?? this.downloadProgress, 
+      currentFileName: currentFileName ?? this.currentFileName);
+  }
+}
+
 Future<PhotoCacheData> cacheThumbnailPhoto(StillData entry) async {
   PhotoCacheData photo = PhotoCacheData();
   String cacheLocation = (await getApplicationCacheDirectory()).path;

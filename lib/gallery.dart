@@ -9,6 +9,7 @@ import "package:sony_camera_api/core.dart";
 import 'package:transferapp/main.dart';
 import "package:simple_http_api/simple_http_api.dart";
 import "package:external_path/external_path.dart";
+import "package:dio/dio.dart";
 
 
 final contentProvider = FutureProvider<List<GalleryEntry>>((ref) async{
@@ -65,6 +66,8 @@ class GalleryView extends ConsumerStatefulWidget{
 class GalleryViewState extends ConsumerState<GalleryView>{
   List<GalleryEntry> galleryList = <GalleryEntry>[];
   int photoViewIndex = -1;
+  List<int> selectedItems = <int>[];
+  bool isSelectionMode = false;
   
   @override
   Widget build(BuildContext context){
@@ -82,11 +85,38 @@ class GalleryViewState extends ConsumerState<GalleryView>{
               final d = item.data as StillData;
               return InkWell(
                 onTap: () async {
-                  setState(() {
-                    photoViewIndex = index;
-                  });
+                    if(isSelectionMode){
+                      if(item.download){
+                        return;
+                      }
+                      if(selectedItems.contains(index)){
+                        setState(() {
+                          selectedItems.remove(index);
+                        });
+                      }else{
+                        setState(() {
+                          selectedItems.add(index);
+                        });
+                      }
+                    }else{
+                      setState(() {
+                        photoViewIndex = index;
+                      });
+                    }
                 },
-                child: GridTile(      
+                onLongPress: () {
+                  if(!isSelectionMode){
+                    setState(() {
+                      if(!item.download){
+                        selectedItems.add(index);
+                      }
+                      isSelectionMode = !isSelectionMode;
+                    });
+                  }
+                },
+                child: Center(
+                  child:Stack(children: [
+                  GridTile(      
                   child: FutureBuilder(
                     future: cacheThumbnail(item),
                     builder: (context ,snapshot){
@@ -95,13 +125,48 @@ class GalleryViewState extends ConsumerState<GalleryView>{
                         return Image.file(File(item.cachedThumbnailPath));
                       }else{
                         return const CircularProgressIndicator();
-                      }
+                      }   
                   })),
+                  Visibility(
+                    visible: isSelectionMode,
+                    child: item.download ?
+                    Container(
+                        margin: const EdgeInsets.all(10),
+                        color: Theme.of(context).colorScheme.primary,
+                        child: const Icon(Icons.download_done)
+                    ):
+                    Checkbox(
+                      onChanged :(bool? x) {
+                          if(x!){
+                            setState(() {
+                              selectedItems.add(index);
+                            });
+                          }else{
+                            setState(() {
+                              selectedItems.remove(index);
+                            });
+                          }
+                      },
+                      value: selectedItems.contains(index),
+                    ))
+                ],),)
               );
           });
         },
         error: (err, _) => const Text("error"), 
-        loading: () => const Center(child: CircularProgressIndicator()))
+        loading: () => const Center(child: CircularProgressIndicator())),
+        floatingActionButton: Visibility(
+          visible: isSelectionMode,
+          child: FloatingActionButton(
+            onPressed: ()async{
+              await savePhoto(selectedItems, galleryList);
+              setState(() {
+                isSelectionMode = false;
+                selectedItems.clear();
+              });
+            },
+            child: const Icon(Icons.download),
+            )),
       );
     }else{
       StillData photoData = galleryList[photoViewIndex].data as StillData;
@@ -128,28 +193,20 @@ class GalleryViewState extends ConsumerState<GalleryView>{
             },
           )
           ),
-        floatingActionButton: FloatingActionButton(onPressed: () async{
-          ref.watch(loadingProvider.notifier).startLoading();
-          if(Platform.isWindows){
-            final dir = (await getDownloadsDirectory())!;
-            await savePhoto(dir, galleryList[photoViewIndex]);
-          }else if(Platform.isAndroid){
-            final path = await ExternalPath.getExternalStoragePublicDirectory(
-              ExternalPath.DIRECTORY_PICTURES,
-            );
-            const albumName = "transferAPP";
-            final albumPath = '$path/$albumName';
-            final dir = await Directory(albumPath).create(recursive: true);
-            await savePhoto(dir, galleryList[photoViewIndex]);
-            print(dir);
-          }
-          ref.watch(loadingProvider.notifier).stopLoading();
-          setState(() {
-            galleryList[photoViewIndex].download = true;
-          });
-        },
-        child: galleryList[photoViewIndex].download ? const Icon(Icons.download_done):const Icon(Icons.download),
-      ));
+        floatingActionButton: 
+        galleryList[photoViewIndex].download ? 
+          null:
+          FloatingActionButton(
+            onPressed: galleryList[photoViewIndex].download ? 
+            null:
+            () async{
+            await savePhoto([photoViewIndex],galleryList);  
+            setState(() {
+              galleryList[photoViewIndex].download = true;
+            });
+          },
+          child: const Icon(Icons.download),
+        ));
     }
   }
 
@@ -193,7 +250,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   return entry;
 }
 
-Future<String> cachePhotoViewPhoto(GalleryEntry entry) async{
+  Future<String> cachePhotoViewPhoto(GalleryEntry entry) async{
   final d = entry.data as StillData;
   String cacheLocation = (await getApplicationCacheDirectory()).path;
   String extension = d.fileName.split('.').last;
@@ -227,33 +284,57 @@ Future<String> cachePhotoViewPhoto(GalleryEntry entry) async{
   return savePath;
 }
 
-  Future<void> savePhoto(Directory saveDir,GalleryEntry entry) async{
-    final data = entry.data as StillData;
-    final savePath = "${saveDir.path}/${data.fileName}";
-    final url = Uri.parse(data.originalUrl);
-    final file = File(savePath);
-    ApiResponse res; 
-    bool isGet = false;
-    Random random = Random();
-    while(isGet != true){
-      try{
-        res = await Api.get(
-          url,
-          options: const ConnectionOption(
-            connectionTimeout: Duration(seconds: 5),
-            sendTimeout: Duration(seconds: 5),
-          )
-        );
-        isGet = true;
-        await file.create();
-        await file.writeAsBytes(res.bodyBytes);
-      }catch(e){
-        print(e);
-        isGet = false;
-        await Future.delayed(Duration(milliseconds: random.nextInt(3000)));
-      }
+Future<void> savePhoto(List<int> selectedItems,List<GalleryEntry> galleryList) async{
+    var d = galleryList[selectedItems.first].data as StillData;
+    ref.watch(downloadStatusProvider.notifier).startDownload(selectedItems.length, d.fileName);
+    var saveDir;
+    if(Platform.isWindows){
+      saveDir = (await getDownloadsDirectory())!;
+    }else if(Platform.isAndroid){
+      final path = await ExternalPath.getExternalStoragePublicDirectory(
+      ExternalPath.DIRECTORY_PICTURES,
+      );
+      const albumName = "transferAPP";
+      final albumPath = '$path/$albumName';
+      saveDir = await Directory(albumPath).create(recursive: true);
     }
+    int count = 0;
+    for(int index in selectedItems){
+      count += 1;
+      GalleryEntry entry = galleryList[index];
+      final data = entry.data as StillData;
+      ref.watch(downloadStatusProvider.notifier).updatePhoto(count, data.fileName);
+      final savePath = "${saveDir.path}/${data.fileName}";
+      final url  = data.originalUrl;
+      final file = File(savePath);
+      Response res; 
+      bool isGet = false;
+      Random random = Random();
+      while(isGet != true){
+        try{
+          res = await Dio().get(
+            url,
+            options: Options(
+              responseType: ResponseType.bytes,
+              sendTimeout: Duration(seconds: 5),
+            ),
+            onReceiveProgress: (count, total) => ref.watch(downloadStatusProvider.notifier).updateProgress(count/total),
+          );
+          isGet = true;
+          await file.create();
+          await file.writeAsBytes(res.data);
+        }catch(e){
+          print(e);
+          isGet = false;
+          await Future.delayed(Duration(milliseconds: random.nextInt(3000)));
+        }
+      }
+      print("$savePath saved");
+      galleryList[index].download = true;
+    }
+    ref.watch(downloadStatusProvider.notifier).finishDownload();
   }
+
 }
 
 
@@ -265,6 +346,10 @@ class GalleryEntry{
   BaseData data;
   
   GalleryEntry({required this.data});
+}
+
+class DownloadInfo{
+  
 }
 
 

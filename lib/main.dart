@@ -16,7 +16,7 @@ final cameraProvider = StateProvider<Camera>((ref){
 
 final loadingProvider = NotifierProvider<LoadingNotifier,LoadingData>(LoadingNotifier.new);
 
-
+final downloadStatusProvider = NotifierProvider<DownloadStatusNotifier,DownloadStatusData>(DownloadStatusNotifier.new);
 
 void main() async{
   //Camera camera = Camera();
@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'TransferApp',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
       home: const MyHomePage(title: 'TransferApp'),
@@ -67,7 +67,32 @@ class MyHomePage extends ConsumerWidget {
                 child: CircularProgressIndicator(),
               ),
             ),
-          ),        
+          ),
+          Visibility(
+            visible: ref.watch(downloadStatusProvider).isDownloading,
+            child: ColoredBox(
+              color: Colors.black54,
+              child: Center(
+                child: AlertDialog(
+                  title: const Text("ダウンロード中"),
+                  content: SizedBox(
+                    width: 0,
+                    child:ListView(
+                      shrinkWrap: true,
+                      children: <Widget>[
+                        ListTile(
+                          title: Text("${ref.watch(downloadStatusProvider).currentCount}/${ref.watch(downloadStatusProvider).photoCount}"),
+                        ),
+                        LinearProgressIndicator(value:ref.watch(downloadStatusProvider).currentCount/ref.watch(downloadStatusProvider).photoCount),
+                        ListTile(
+                          title: Text("Downloading:${ref.watch(downloadStatusProvider).currentFileName}"),
+                        ),
+                        LinearProgressIndicator(value: ref.watch(downloadStatusProvider).downloadProgress)
+                      ],
+                    ),
+                  ),),
+                ),
+              ),)    
       ],
     );
 
