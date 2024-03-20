@@ -92,6 +92,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
           data: (data){
           galleryList = contentP.value!;
             return GridView.builder(
+              key: PageStorageKey("galleryGrid"),
               gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 160),
               itemCount: galleryList.length,
               itemBuilder: (context,index) {
