@@ -1,6 +1,8 @@
+import 'dart:ffi';
 import "dart:io";
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import "package:sony_camera_api/camera.dart";
@@ -8,8 +10,10 @@ import "package:sony_camera_api/core.dart";
 import 'package:transferapp/main.dart';
 import "package:external_path/external_path.dart";
 import "package:dio/dio.dart";
+import 'package:transferapp/util.dart';
 
-final downloadLockProvider = StateProvider<bool>((ref) => false);
+final cacheDownloadControlProvider = NotifierProvider<CacheDownloadControlNotifier,CacheDownloadControl>(CacheDownloadControlNotifier.new);
+
 final contentProvider = FutureProvider<List<GalleryEntry>>((ref) async{
   final cacheLocation = (await getApplicationCacheDirectory()).path;
   print("start:");
@@ -65,119 +69,129 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   List<GalleryEntry> galleryList = <GalleryEntry>[];
   int photoViewIndex = -1;
   List<int> selectedItems = <int>[];
-  bool isSelectionMode = false;
+  final ValueNotifier<bool> _isSelectionMode = ValueNotifier<bool>(false);
   
   @override
   Widget build(BuildContext context){
-    print(selectedItems);
     if(photoViewIndex == -1){
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-        if(isSelectionMode){
-          ref.watch(downloadLockProvider.notifier).state = true;
+        if(_isSelectionMode.value){
+          print("locked");
+          ref.watch(cacheDownloadControlProvider.notifier).lock();
         }else{
-          ref.watch(downloadLockProvider.notifier).state = false;
+          print("unlocked");
+          ref.watch(cacheDownloadControlProvider.notifier).unlock();
         }
       });
       final contentP = ref.watch(contentProvider);
-      return Scaffold(
-        body:contentP.when(
-        data: (data){
-        galleryList = contentP.value!;
-          return GridView.builder(
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 160),
-            itemCount: galleryList.length,
-            itemBuilder: (context,index) {
-              final item = galleryList[index];
-              final d = item.data as StillData;
-              return InkWell(
-                onTap: () async {
-                    if(isSelectionMode){
-                      if(item.download){
-                        return;
-                      }
-                      if(selectedItems.contains(index)){
-                        setState(() {
-                          selectedItems.remove(index);
-                        });
+      return ValueListenableBuilder(
+        valueListenable: _isSelectionMode, 
+        builder: (context,value,child){
+        return Scaffold(
+          body:contentP.when(
+          data: (data){
+          galleryList = contentP.value!;
+            return GridView.builder(
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 160),
+              itemCount: galleryList.length,
+              itemBuilder: (context,index) {
+                final item = galleryList[index];
+                final d = item.data as StillData;
+                return InkWell(
+                  onTap: () async {
+                      if(_isSelectionMode.value){
+                        if(item.download){
+                          return;
+                        }
+                        if(selectedItems.contains(index)){
+                          setState(() {
+                            selectedItems.remove(index);
+                          });
+                        }else{
+                          setState(() {
+                            selectedItems.add(index);
+                          });
+                        }
                       }else{
                         setState(() {
-                          selectedItems.add(index);
+                          photoViewIndex = index;
                         });
                       }
-                    }else{
+                  },
+                  onLongPress: () {
+                    if(!_isSelectionMode.value){
                       setState(() {
-                        photoViewIndex = index;
+                        if(!item.download){
+                          selectedItems.add(index);
+                        }
+                        _isSelectionMode.value = true;
                       });
                     }
-                },
-                onLongPress: () {
-                  if(!isSelectionMode){
-                    setState(() {
-                      if(!item.download){
-                        selectedItems.add(index);
-                      }
-                      isSelectionMode = !isSelectionMode;
-                    });
-                  }
-                },
-                child: Center(
-                  child:Stack(children: [
-                  GridTile(      
-                  child: FutureBuilder(
-                    future: cacheThumbnail(item),
-                    builder: (context ,snapshot){
-                      if(snapshot.hasData){
-                        replaceEntry(index, snapshot.data!);
-                        return Image.file(File(item.cachedThumbnailPath));
-                      }else{
-                        return const CircularProgressIndicator();
-                      }   
-                  })),
-                  Visibility(
-                    visible: isSelectionMode,
-                    child: item.download ?
-                    Container(
-                        margin: const EdgeInsets.all(10),
-                        color: Theme.of(context).colorScheme.primary,
-                        child: const Icon(Icons.download_done)
-                    ):
-                    Checkbox(
-                      onChanged :(bool? x) {
-                          if(x!){
-                            setState(() {
-                              selectedItems.add(index);
-                            });
-                          }else{
-                            setState(() {
-                              selectedItems.remove(index);
-                            });
-                          }
-                      },
-                      value: selectedItems.contains(index),
-                    ))
-                ],),)
-              );
-          });
-        },
-        error: (err, _) => const Text("error"), 
-        loading: () => const Center(child: CircularProgressIndicator())),
-        floatingActionButton: Visibility(
-          visible: isSelectionMode,
-          child: FloatingActionButton(
-            onPressed: ()async{
-              await savePhoto(selectedItems, galleryList);
-              setState(() {
-                isSelectionMode = false;
-                selectedItems.clear();
-              });
-            },
-            child: const Icon(Icons.download),
-            )),
-      );
+                  },
+                  child: Center(
+                    child:Stack(children: [
+                    GridTile(      
+                    child: FutureBuilder(
+                      future: cacheThumbnail(item),
+                      builder: (context ,snapshot){
+                        if(snapshot.hasData && snapshot.data!.get){
+                          return Image.file(File(item.cachedThumbnailPath));
+                        }else{
+                          return Stack( 
+                            children: [
+                              Image.asset("assets/cache_placeholder.png"),
+                              const Center(child: CircularProgressIndicator()),
+                            ],
+                          );
+                        }   
+                    })),
+                    Visibility(
+                      visible: _isSelectionMode.value,
+                      child: item.download ?
+                      Container(
+                          margin: const EdgeInsets.all(10),
+                          color: Theme.of(context).colorScheme.primary,
+                          child: const Icon(Icons.download_done)
+                      ):
+                      Checkbox(
+                        onChanged :(bool? x) {
+                            if(x!){
+                              setState(() {
+                                selectedItems.add(index);
+                              });
+                            }else{
+                              setState(() {
+                                selectedItems.remove(index);
+                              });
+                            }
+                        },
+                        value: selectedItems.contains(index),
+                      ))
+                  ],),)
+                );
+            });
+          },
+          error: (err, _) => const Text("error"), 
+          loading: () => const Center(child: CircularProgressIndicator())),
+          floatingActionButton: Visibility(
+            visible: _isSelectionMode.value,
+            child: FloatingActionButton(
+              onPressed: ()async{
+                await savePhoto(selectedItems, galleryList);
+                setState(() {
+                  _isSelectionMode.value = false;
+                  selectedItems.clear();
+                });
+              },
+              child: const Icon(Icons.download),
+              )),
+        );
+      });
     }else{
       StillData photoData = galleryList[photoViewIndex].data as StillData;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.watch(downloadLockProvider.notifier).state = true;
+      print("locked");
+        ref.watch(cacheDownloadControlProvider.notifier).lock();
       });
       return Scaffold(
         appBar: AppBar(
@@ -232,26 +246,33 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   String savePath = "$cacheLocation/${d.fileName}";
   final file = File(savePath);
   final url = d.thumbnailUrl;
-  Response res; 
+  Response? res; 
   bool isGet = false;
   Random random = Random();
+  final cancelToken = ref.watch(cacheDownloadControlProvider).cancelToken;
   while(isGet != true){
-    if(ref.watch(downloadLockProvider)){
-      print("canceled");
-    }
     try{
-      res = await Dio().get(
+      final calling = Future.sync(() async{
+        res = await Dio().get(
             url,
             options: Options(
               responseType: ResponseType.bytes,
               sendTimeout: const Duration(seconds: 5),
             ),
+            cancelToken: cancelToken,
           );
+      });
+
+      await calling;
       isGet = true;
       await file.create();
-      await file.writeAsBytes(res.data);
-    }catch(e){
-      print(e);
+      await file.writeAsBytes(res!.data);
+    }on DioException catch(e){
+      if(e.type == DioExceptionType.cancel){
+        print("cancelled");
+        isGet = false;
+        break;
+      }
       isGet = false;
       await Future.delayed(Duration(milliseconds: 2000 + random.nextInt(3000)));
     }
@@ -350,7 +371,6 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   }
   
 }
-
 
 
 class GalleryEntry{

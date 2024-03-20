@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:localstore/localstore.dart';
 import "package:riverpod/riverpod.dart";
@@ -136,6 +137,42 @@ class DownloadStatusData{
       downloadProgress: downloadProgress ?? this.downloadProgress, 
       currentFileName: currentFileName ?? this.currentFileName);
   }
+}
+
+class CacheDownloadControlNotifier extends Notifier<CacheDownloadControl>{
+  @override 
+  CacheDownloadControl build(){
+    return CacheDownloadControl(cancelToken: CancelToken(), isLocked: false);
+  }
+
+  void lock(){
+    CancelToken token = state.cancelToken;
+    token.cancel();
+    state = state.copyWith(isLocked: true);
+  }
+
+  void unlock(){
+    CancelToken token = CancelToken();
+    state = state.copyWith(cancelToken:token,isLocked: false);
+  }
+}
+
+class CacheDownloadControl{
+  final isLocked;
+  final cancelToken;
+  
+  CacheDownloadControl({
+    required this.cancelToken,
+    required this.isLocked,
+  });
+
+  CacheDownloadControl copyWith({CancelToken? cancelToken, bool? isLocked}){
+    return CacheDownloadControl(
+      cancelToken: cancelToken ?? this.cancelToken,
+      isLocked: isLocked ?? this.isLocked,
+      );
+  }
+
 }
 
 Future<PhotoCacheData> cacheThumbnailPhoto(StillData entry) async {
