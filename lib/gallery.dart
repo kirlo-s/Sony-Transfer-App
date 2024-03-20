@@ -1,6 +1,5 @@
 import "dart:io";
 import 'dart:math';
-import 'package:fast_cached_network_image/fast_cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,7 +10,6 @@ import "package:external_path/external_path.dart";
 import "package:dio/dio.dart";
 
 final downloadLockProvider = StateProvider<bool>((ref) => false);
-final cancelTokenProvicder = Provider<CancelToken>((ref) => CancelToken());
 final contentProvider = FutureProvider<List<GalleryEntry>>((ref) async{
   final cacheLocation = (await getApplicationCacheDirectory()).path;
   print("start:");
@@ -71,6 +69,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   
   @override
   Widget build(BuildContext context){
+    print(selectedItems);
     if(photoViewIndex == -1){
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
         if(isSelectionMode){
@@ -299,6 +298,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
 }
 
   Future<void> savePhoto(List<int> selectedItems,List<GalleryEntry> galleryList) async{
+    if(selectedItems.isEmpty) return;
     var d = galleryList[selectedItems.first].data as StillData;
     ref.watch(downloadStatusProvider.notifier).startDownload(selectedItems.length, d.fileName);
     var saveDir;
