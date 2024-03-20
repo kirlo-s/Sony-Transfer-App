@@ -7,11 +7,11 @@ import 'package:path_provider/path_provider.dart';
 import "package:sony_camera_api/camera.dart";
 import "package:sony_camera_api/core.dart";
 import 'package:transferapp/main.dart';
-import "package:simple_http_api/simple_http_api.dart";
 import "package:external_path/external_path.dart";
 import "package:dio/dio.dart";
 
-
+final downloadLockProvider = StateProvider<bool>((ref) => false);
+final cancelTokenProvicder = Provider<CancelToken>((ref) => CancelToken());
 final contentProvider = FutureProvider<List<GalleryEntry>>((ref) async{
   final cacheLocation = (await getApplicationCacheDirectory()).path;
   print("start:");
@@ -72,6 +72,13 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   @override
   Widget build(BuildContext context){
     if(photoViewIndex == -1){
+      WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+        if(isSelectionMode){
+          ref.watch(downloadLockProvider.notifier).state = true;
+        }else{
+          ref.watch(downloadLockProvider.notifier).state = false;
+        }
+      });
       final contentP = ref.watch(contentProvider);
       return Scaffold(
         body:contentP.when(
@@ -170,6 +177,9 @@ class GalleryViewState extends ConsumerState<GalleryView>{
       );
     }else{
       StillData photoData = galleryList[photoViewIndex].data as StillData;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.watch(downloadLockProvider.notifier).state = true;
+      });
       return Scaffold(
         appBar: AppBar(
           leading: TextButton(
@@ -222,31 +232,36 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   String cacheLocation = (await getApplicationCacheDirectory()).path;
   String savePath = "$cacheLocation/${d.fileName}";
   final file = File(savePath);
-  final url = Uri.parse(d.thumbnailUrl);
-  ApiResponse res; 
+  final url = d.thumbnailUrl;
+  Response res; 
   bool isGet = false;
   Random random = Random();
   while(isGet != true){
+    if(ref.watch(downloadLockProvider)){
+      print("canceled");
+    }
     try{
-      res = await Api.get(
-        url,
-        options: const ConnectionOption(
-          connectionTimeout: Duration(seconds: 5),
-          sendTimeout: Duration(seconds: 5),
-          receiveTimeout: Duration(seconds: 5)
-        )
-      );
+      res = await Dio().get(
+            url,
+            options: Options(
+              responseType: ResponseType.bytes,
+              sendTimeout: const Duration(seconds: 5),
+            ),
+          );
       isGet = true;
       await file.create();
-      await file.writeAsBytes(res.bodyBytes);
+      await file.writeAsBytes(res.data);
     }catch(e){
       print(e);
       isGet = false;
       await Future.delayed(Duration(milliseconds: 2000 + random.nextInt(3000)));
     }
   }
-  entry.cachedThumbnailPath = savePath;
-  entry.get = true;
+
+  if(isGet){
+    entry.cachedThumbnailPath = savePath;
+    entry.get = true;
+  }
   return entry;
 }
 
@@ -259,23 +274,22 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   if(await file.exists()){
     await file.delete();
   }
-  final url = Uri.parse(d.smallUrl);
-  ApiResponse res; 
+  final url = d.smallUrl;
+  Response res; 
   bool isGet = false;
   Random random = Random();
   while(isGet != true){
     try{
-      res = await Api.get(
-        url,
-        options: const ConnectionOption(
-          connectionTimeout: Duration(seconds: 5),
-          sendTimeout: Duration(seconds: 5),
-          receiveTimeout: Duration(seconds: 5)
-        )
-      );
+      res = await Dio().get(
+            url,
+            options: Options(
+              responseType: ResponseType.bytes,
+              sendTimeout: const Duration(seconds: 5),
+            ),
+          );
       isGet = true;
       await file.create();
-      await file.writeAsBytes(res.bodyBytes);
+      await file.writeAsBytes(res.data);
     }catch(e){
       isGet = false;
       await Future.delayed(Duration(milliseconds: random.nextInt(3000)));
@@ -284,7 +298,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   return savePath;
 }
 
-Future<void> savePhoto(List<int> selectedItems,List<GalleryEntry> galleryList) async{
+  Future<void> savePhoto(List<int> selectedItems,List<GalleryEntry> galleryList) async{
     var d = galleryList[selectedItems.first].data as StillData;
     ref.watch(downloadStatusProvider.notifier).startDownload(selectedItems.length, d.fileName);
     var saveDir;
@@ -316,7 +330,7 @@ Future<void> savePhoto(List<int> selectedItems,List<GalleryEntry> galleryList) a
             url,
             options: Options(
               responseType: ResponseType.bytes,
-              sendTimeout: Duration(seconds: 5),
+              sendTimeout: const Duration(seconds: 5),
             ),
             onReceiveProgress: (count, total) => ref.watch(downloadStatusProvider.notifier).updateProgress(count/total),
           );
@@ -334,7 +348,7 @@ Future<void> savePhoto(List<int> selectedItems,List<GalleryEntry> galleryList) a
     }
     ref.watch(downloadStatusProvider.notifier).finishDownload();
   }
-
+  
 }
 
 
