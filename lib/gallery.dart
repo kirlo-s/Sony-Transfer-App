@@ -1,8 +1,6 @@
-import 'dart:ffi';
 import "dart:io";
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_store_plus/media_store_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -206,7 +204,9 @@ class GalleryViewState extends ConsumerState<GalleryView>{
             child: const Icon(Icons.arrow_back)),
         ),
         body: Center(
-          child: FutureBuilder(
+          child: ref.watch(downloadStatusProvider).isDownloading ?
+          const SizedBox():
+          FutureBuilder(
             future: cachePhotoViewPhoto(galleryList[photoViewIndex]),
             builder: (context, snapshot) {
               if(snapshot.hasData){
@@ -251,7 +251,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   Response? res; 
   bool isGet = false;
   Random random = Random();
-  final cancelToken = ref.watch(cacheDownloadControlProvider).cancelToken;
+  final cancelToken = ref.watch(cacheDownloadControlProvider).cacheCancelToken;
   while(isGet != true){
     try{
       final calling = Future.sync(() async{
@@ -295,12 +295,13 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   final file = File(savePath);
   if(await file.exists()){
     await file.delete();
+    print("deleted");
   }
   final url = d.smallUrl;
   Response res; 
   bool isGet = false;
   Random random = Random();
-  while(isGet != true){
+  while(!isGet){
     try{
       res = await Dio().get(
             url,
@@ -313,6 +314,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
       await file.create();
       await file.writeAsBytes(res.data);
     }catch(e){
+      print(e);
       isGet = false;
       await Future.delayed(Duration(milliseconds: random.nextInt(3000)));
     }
@@ -341,23 +343,34 @@ class GalleryViewState extends ConsumerState<GalleryView>{
       final file = File(savePath);
       final MediaStore mediaStorePlugin = MediaStore();
       MediaStore.appFolder = "TransferApp";
-      Response res; 
+      Response? res; 
       bool isGet = false;
+      CancelToken cancelToken = ref.watch(downloadStatusProvider).photoCancelToken;
       Random random = Random();
       while(isGet != true){
         try{
-          res = await Dio().get(
-            url,
-            options: Options(
-              responseType: ResponseType.bytes,
-              sendTimeout: const Duration(seconds: 5),
-            ),
-            onReceiveProgress: (count, total) => ref.watch(downloadStatusProvider.notifier).updateProgress(count/total),
-          );
+          final calling = Future.sync(() async {
+            res = await Dio().get(
+              url,
+              options: Options(
+                responseType: ResponseType.bytes,
+                sendTimeout: const Duration(seconds: 5),
+              ),
+              onReceiveProgress: (count, total) => ref.watch(downloadStatusProvider.notifier).updateProgress(count/total),
+              cancelToken: cancelToken,
+            );
+          });
+
+          await calling;
           isGet = true;
           await file.create();
-          await file.writeAsBytes(res.data);
-        }catch(e){
+          await file.writeAsBytes(res!.data);
+        }on DioException catch(e){
+          if(e.type == DioExceptionType.cancel){
+            print("photoSave cancelled");
+            ref.watch(downloadStatusProvider.notifier).finishDownload();
+            return;
+          }
           print(e);
           isGet = false;
           await Future.delayed(Duration(milliseconds: random.nextInt(3000)));
