@@ -245,7 +245,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   }
   final d = entry.data as StillData;
   String cacheLocation = (await getApplicationCacheDirectory()).path;
-  String savePath = "$cacheLocation/${d.fileName}";
+  String savePath = "$cacheLocation/thumb_${d.fileName}";
   final file = File(savePath);
   final url = d.thumbnailUrl;
   Response? res; 
