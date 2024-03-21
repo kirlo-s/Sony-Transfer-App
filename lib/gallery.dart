@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_store_plus/media_store_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import "package:sony_camera_api/camera.dart";
 import "package:sony_camera_api/core.dart";
@@ -327,12 +328,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
     if(Platform.isWindows){
       saveDir = (await getDownloadsDirectory())!;
     }else if(Platform.isAndroid){
-      final path = await ExternalPath.getExternalStoragePublicDirectory(
-      ExternalPath.DIRECTORY_PICTURES,
-      );
-      const albumName = "transferAPP";
-      final albumPath = '$path/$albumName';
-      saveDir = await Directory(albumPath).create(recursive: true);
+      saveDir = await getTemporaryDirectory();
     }
     int count = 0;
     for(int index in selectedItems){
@@ -343,6 +339,8 @@ class GalleryViewState extends ConsumerState<GalleryView>{
       final savePath = "${saveDir.path}/${data.fileName}";
       final url  = data.originalUrl;
       final file = File(savePath);
+      final MediaStore mediaStorePlugin = MediaStore();
+      MediaStore.appFolder = "TransferApp";
       Response res; 
       bool isGet = false;
       Random random = Random();
@@ -365,7 +363,17 @@ class GalleryViewState extends ConsumerState<GalleryView>{
           await Future.delayed(Duration(milliseconds: random.nextInt(3000)));
         }
       }
-      print("$savePath saved");
+
+      if(Platform.isAndroid){
+        int platformSDKVersion = await mediaStorePlugin.getPlatformSDKInt() ?? 0;
+        await mediaStorePlugin.saveFile(
+        tempFilePath: savePath, 
+        dirType: DirType.photo, 
+        dirName: DirType.photo.defaults);
+        if(await file.exists()){
+          await file.delete();
+        }
+      }
       galleryList[index].download = true;
     }
     ref.watch(downloadStatusProvider.notifier).finishDownload();
