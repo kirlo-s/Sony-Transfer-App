@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:localstore/localstore.dart';
 import "package:riverpod/riverpod.dart";
@@ -88,7 +89,7 @@ class LoadingNotifier extends Notifier<LoadingData>{
 class DownloadStatusNotifier extends Notifier<DownloadStatusData>{
   @override
   DownloadStatusData build(){
-    return DownloadStatusData(isDownloading: false, isCancel: false, currentCount: 0, photoCount: 0, downloadProgress: 0, currentFileName: "");
+    return DownloadStatusData(isDownloading: false, currentCount: 0, photoCount: 0, downloadProgress: 0, currentFileName: "",photoCancelToken: CancelToken());
   }
   
   void startDownload(int photoCount,String currentFileName){
@@ -103,39 +104,79 @@ class DownloadStatusNotifier extends Notifier<DownloadStatusData>{
   }
 
   void finishDownload(){
-    state = state.copyWith(isDownloading: false, isCancel: false, currentCount: 0, photoCount: 0, downloadProgress: 0, currentFileName: "");
+    state = state.copyWith(isDownloading: false, currentCount: 0, photoCount: 0, downloadProgress: 0, currentFileName: "");
   }
 
   void cancelDownload(){
-    state = state.copyWith(isCancel: true);
+    CancelToken token = state.photoCancelToken;
+    token.cancel();
+    CancelToken newToken = CancelToken();
+    state = state.copyWith(photoCancelToken: newToken);
   }
 }
 
 class DownloadStatusData{
   final bool isDownloading;
-  final bool isCancel;
   final int currentCount;
   final int photoCount;
   final double downloadProgress;
   final String currentFileName;
+  final CancelToken photoCancelToken;
+
   DownloadStatusData({
     required this.isDownloading,
-    required this.isCancel,
     required this.currentCount,
     required this.photoCount,
     required this.downloadProgress,
-    required this.currentFileName 
+    required this.currentFileName,
+    required this.photoCancelToken,
   });
 
-  DownloadStatusData copyWith({bool? isDownloading,bool? isCancel,int? currentCount,int? photoCount,double? downloadProgress,String? currentFileName}){
+  DownloadStatusData copyWith({bool? isDownloading,bool? isCancel,int? currentCount,int? photoCount,double? downloadProgress,String? currentFileName,CancelToken? photoCancelToken}){
     return DownloadStatusData(
-      isDownloading: isDownloading ?? this.isDownloading, 
-      isCancel: isCancel ?? this.isCancel, 
+      isDownloading: isDownloading ?? this.isDownloading,  
       currentCount: currentCount?? this.currentCount, 
       photoCount: photoCount ?? this.photoCount, 
       downloadProgress: downloadProgress ?? this.downloadProgress, 
-      currentFileName: currentFileName ?? this.currentFileName);
+      currentFileName: currentFileName ?? this.currentFileName,
+      photoCancelToken: photoCancelToken ?? this.photoCancelToken);
   }
+}
+
+class CacheDownloadControlNotifier extends Notifier<CacheDownloadControl>{
+  @override 
+  CacheDownloadControl build(){
+    return CacheDownloadControl(cacheCancelToken: CancelToken(), isLocked: false);
+  }
+
+  void lock(){
+    CancelToken token = state.cacheCancelToken;
+    token.cancel();
+    state = state.copyWith(isLocked: true);
+  }
+
+  void unlock(){
+    CancelToken token = CancelToken();
+    state = state.copyWith(cacheCancelToken:token,isLocked: false);
+  }
+}
+
+class CacheDownloadControl{
+  final isLocked;
+  final cacheCancelToken;
+  
+  CacheDownloadControl({
+    required this.cacheCancelToken,
+    required this.isLocked,
+  });
+
+  CacheDownloadControl copyWith({CancelToken? cacheCancelToken, CancelToken? photoCancelToken, bool? isLocked}){
+    return CacheDownloadControl(
+      cacheCancelToken: cacheCancelToken ?? this.cacheCancelToken,
+      isLocked: isLocked ?? this.isLocked,
+      );
+  }
+
 }
 
 Future<PhotoCacheData> cacheThumbnailPhoto(StillData entry) async {

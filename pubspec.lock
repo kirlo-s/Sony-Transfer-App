@@ -49,14 +49,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.3"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      sha256: d57953e10f9f8327ce64a508a355f0b1ec902193f66288e8cb5070e7c47eeb2d
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.6"
   device_info_plus:
     dependency: "direct main"
     description:
@@ -101,10 +93,10 @@ packages:
     dependency: "direct main"
     description:
       name: fast_cached_network_image
-      sha256: "9f9cb77f8e6e30b936d12c87ec060a7ead97f14881ebf28de51a7e871cbfc644"
+      sha256: "8e1df75dc7dce883b069d2978c8d0ddb9958f0551b1bb111e675adcbddf9bf56"
       url: "https://pub.dev"
     source: hosted
-    version: "1.2.7"
+    version: "1.2.6"
   ffi:
     dependency: transitive
     description:
@@ -264,6 +256,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.8.0"
+  media_store_plus:
+    dependency: "direct main"
+    description:
+      name: media_store_plus
+      sha256: "8ef2d1db47a6986c15d9d20bfb3689891bd0f8648d2da65da0343ac574dd071d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.7"
   meta:
     dependency: transitive
     description:

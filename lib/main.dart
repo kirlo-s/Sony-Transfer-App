@@ -90,7 +90,16 @@ class MyHomePage extends ConsumerWidget {
                         LinearProgressIndicator(value: ref.watch(downloadStatusProvider).downloadProgress)
                       ],
                     ),
-                  ),),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        ref.watch(downloadStatusProvider.notifier).cancelDownload();
+                      }, 
+                      child: const Text("Cancel") 
+                      ),
+                  ],
+                  ),
                 ),
               ),)    
       ],
