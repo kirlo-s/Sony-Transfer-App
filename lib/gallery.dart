@@ -43,7 +43,6 @@ final contentProvider = FutureProvider<List<GalleryEntry>>((ref) async{
         if(item.type == DataType.still){
           item as StillData;
             GalleryEntry entry = GalleryEntry(data: item);
-            entry.get = false;
             imageList.add(entry);
         }
       }
@@ -134,13 +133,15 @@ class GalleryViewState extends ConsumerState<GalleryView>{
                     child: FutureBuilder(
                       future: cacheThumbnail(item),
                       builder: (context ,snapshot){
-                        if(snapshot.hasData && snapshot.data!.get){
+                        if(snapshot.hasData && snapshot.data!.isThumbnailCached()){
                           return Image.file(File(item.cachedThumbnailPath));
                         }else{
                           return Stack( 
                             children: [
                               Image.asset("assets/cache_placeholder.png"),
-                              const Center(child: CircularProgressIndicator()),
+                              Visibility(
+                                visible: !_isSelectionMode.value,
+                                child: const Center(child: CircularProgressIndicator())),
                             ],
                           );
                         }   
@@ -189,10 +190,12 @@ class GalleryViewState extends ConsumerState<GalleryView>{
       });
     }else{
       StillData photoData = galleryList[photoViewIndex].data as StillData;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      print("locked");
-        ref.watch(cacheDownloadControlProvider.notifier).lock();
-      });
+      if(ref.watch(downloadStatusProvider).isDownloading == false){
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          print("locked");
+          ref.watch(cacheDownloadControlProvider.notifier).lock();
+        });
+      }
       return Scaffold(
         appBar: AppBar(
           leading: TextButton(
@@ -209,9 +212,8 @@ class GalleryViewState extends ConsumerState<GalleryView>{
           FutureBuilder(
             future: cachePhotoViewPhoto(galleryList[photoViewIndex]),
             builder: (context, snapshot) {
-              if(snapshot.hasData){
-                final imageForUint8 =  File(snapshot.data!).readAsBytesSync();
-                return Image.memory(imageForUint8);
+              if(snapshot.hasData && snapshot.data!.isPhotoViewCached()){
+                return Image.file(File(snapshot.data!.cachedPhotoViewPath));
               }else{
                 return const CircularProgressIndicator();
               }
@@ -240,7 +242,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
   }
 
   Future<GalleryEntry> cacheThumbnail(GalleryEntry entry) async{
-  if(entry.get){
+  if(entry.isThumbnailCached()){
     return entry;
   }
   final d = entry.data as StillData;
@@ -282,21 +284,19 @@ class GalleryViewState extends ConsumerState<GalleryView>{
 
   if(isGet){
     entry.cachedThumbnailPath = savePath;
-    entry.get = true;
   }
   return entry;
 }
 
-  Future<String> cachePhotoViewPhoto(GalleryEntry entry) async{
+  Future<GalleryEntry> cachePhotoViewPhoto(GalleryEntry entry) async{
+  if(entry.isPhotoViewCached()){
+    return entry;
+  }
   final d = entry.data as StillData;
   String cacheLocation = (await getApplicationCacheDirectory()).path;
   String extension = d.fileName.split('.').last;
-  String savePath = "$cacheLocation/photoViewCache.$extension";
+  String savePath = "$cacheLocation/photoView_${d.fileName}";
   final file = File(savePath);
-  if(await file.exists()){
-    await file.delete();
-    print("deleted");
-  }
   final url = d.smallUrl;
   Response res; 
   bool isGet = false;
@@ -309,6 +309,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
               responseType: ResponseType.bytes,
               sendTimeout: const Duration(seconds: 5),
             ),
+            onReceiveProgress: (count, total) => print(count/total),
           );
       isGet = true;
       await file.create();
@@ -319,7 +320,8 @@ class GalleryViewState extends ConsumerState<GalleryView>{
       await Future.delayed(Duration(milliseconds: random.nextInt(3000)));
     }
   }
-  return savePath;
+  entry.cachedPhotoViewPath = savePath;
+  return entry;
 }
 
   Future<void> savePhoto(List<int> selectedItems,List<GalleryEntry> galleryList) async{
@@ -330,7 +332,7 @@ class GalleryViewState extends ConsumerState<GalleryView>{
     if(Platform.isWindows){
       saveDir = (await getDownloadsDirectory())!;
     }else if(Platform.isAndroid){
-      saveDir = await getTemporaryDirectory();
+      saveDir = await getApplicationCacheDirectory();
     }
     int count = 0;
     for(int index in selectedItems){
@@ -396,12 +398,22 @@ class GalleryViewState extends ConsumerState<GalleryView>{
 
 
 class GalleryEntry{
-  bool get = false;
   bool download = false;
   String cachedThumbnailPath = "";
+  String cachedPhotoViewPath = "";
   BaseData data;
   
   GalleryEntry({required this.data});
+
+  bool isThumbnailCached(){
+    File f = File(cachedThumbnailPath);
+    return f.existsSync();
+  }
+
+  bool isPhotoViewCached(){
+    File f = File(cachedPhotoViewPath);
+    return f.existsSync();
+  }
 }
 
 class DownloadInfo{
