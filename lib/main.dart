@@ -8,6 +8,7 @@ import "package:transferapp/cameralist.dart";
 import "package:path_provider/path_provider.dart";
 import "package:transferapp/gallery.dart";
 import "package:transferapp/util.dart";
+import "package:dynamic_color/dynamic_color.dart";
 
 final cameraProvider = StateProvider<Camera>((ref){
   Camera camera = Camera();
@@ -38,13 +39,34 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TransferApp',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'TransferApp'),
+    return DynamicColorBuilder(
+      builder: (ColorScheme? lightDynamic,ColorScheme? darkDynamic){
+        return MaterialApp(
+          title: 'TransferApp',
+          theme: lightTheme(lightDynamic),
+          darkTheme: darkTheme(darkDynamic),
+          home: const MyHomePage(title: 'TransferApp'),
+        );
+      },
+      );
+  }
+
+  ThemeData lightTheme(ColorScheme? lightColorScheme) {
+    final scheme = lightColorScheme ??
+        ColorScheme.fromSeed(seedColor: Colors.blue);
+    return ThemeData(
+      colorScheme: scheme,
+    );
+  }
+
+  ThemeData darkTheme(ColorScheme? darkColorScheme) {
+    final scheme = darkColorScheme ??
+        ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.dark,
+        );
+    return ThemeData(
+      colorScheme: scheme,
     );
   }
 }
